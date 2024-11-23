@@ -2,10 +2,9 @@ use std::{sync::Arc, time::Duration};
 use log::{error, info};
 use rand::{thread_rng, Rng};
 use tokio::sync::{Mutex, MutexGuard};
-use tokio::task::JoinHandle;
 use tokio::time;
-use crate::raft::node::{NodeState, RaftNode};
-use crate::raft::rpc::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+use crate::raft::model::node::{NodeState, RaftNode};
+use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 #[derive(Debug)]
 pub struct Scheduler { }
@@ -15,47 +14,47 @@ impl Scheduler {
         Scheduler { }
     }
 
-    pub async fn schedule_leader_election_process(&mut self, millis: u64, raft_node: Arc<Mutex<RaftNode>>) {
+    pub async fn schedule_leader_election_process(&mut self, election_timeout_seconds: (u64, u64), raft_node: Arc<Mutex<RaftNode>>) {
         tokio::spawn(async move {
             loop {
-                time::sleep(Duration::from_millis(millis)).await;
+                let sleep_time_millis = {
+                    let mut rng = thread_rng();
+                    let lower_bound = election_timeout_seconds.0 * 1000;
+                    let upper_bound = election_timeout_seconds.1 * 1000;
+                    let sleep_time_millis = rng.gen_range(lower_bound..upper_bound);
+                    sleep_time_millis
+                };
 
-                let mut raft_node_mutex = raft_node.lock().await;
+                time::sleep(Duration::from_millis(sleep_time_millis)).await;
 
-                if raft_node_mutex.state() == NodeState::Leader {
-                    // info!("I'm the leader, no need to trigger an election!");
-                    continue;
-                }
+                let received_heartbeat = {
+                    let mut raft_node_mutex = raft_node.lock().await;
 
-                let received_heartbeat = raft_node_mutex.received_heartbeat();
-                raft_node_mutex.reset_heartbeat();
-                drop(raft_node_mutex); // todo: is there a better way?
+                    if raft_node_mutex.state() == NodeState::Leader {
+                        continue;
+                    }
+
+                    let received_heartbeat = raft_node_mutex.received_heartbeat();
+                    raft_node_mutex.reset_heartbeat();
+                    received_heartbeat
+                };
 
                 if !received_heartbeat {
                     info!("I've not received an heartbeat in a timely fashion, I'll trigger a new leader election!");
                     trigger_leader_election(raft_node.clone()).await
-                } else {
-                    // info!("I'm not the leader, but I received an heartbeat in a timely fashion, no need to trigger an election!");
                 }
             }
         });
     }
 
-    pub async fn schedule_heartbeats(&self, millis: u64, raft_node: Arc<Mutex<RaftNode>>) {
-        let mut rng = thread_rng();
-        let random = rng.gen_range(1..5);
-
-        let sleep_time_millis = random * millis;
-        info!("I'll try to send heartbeats every {sleep_time_millis} seconds");
+    pub async fn schedule_heartbeats(&self, heartbeat_timeout_seconds: u64, raft_node: Arc<Mutex<RaftNode>>) {
         tokio::spawn(async move {
             loop {
-
-                time::sleep(Duration::from_millis(sleep_time_millis)).await;
+                time::sleep(Duration::from_millis(heartbeat_timeout_seconds * 1000)).await;
 
                 let raft_node_mutex = raft_node.lock().await;
 
                 if raft_node_mutex.state() != NodeState::Leader {
-                    // info!("I'm not the leader, no need to send heartbeats to other brokers!");
                     continue;
                 }
 
@@ -65,7 +64,7 @@ impl Scheduler {
                 drop(raft_node_mutex);
 
                 let append_entries_request = build_append_entries_request(raft_node.clone()).await;
-                let append_entries_responses = perform_append_entries_requests(cluster_hosts, append_entries_request).await;
+                let append_entries_responses = perform_append_entries_requests(&cluster_hosts, append_entries_request).await;
 
                 let max_term_in_response = append_entries_responses.iter()
                     .map(|response| response.term)
@@ -87,14 +86,13 @@ async fn trigger_leader_election(raft_node: Arc<Mutex<RaftNode>>) {
 
     info!("Starting election for term {}", raft_node_mutex.current_term());
 
-    let cluster_hosts = raft_node_mutex.cluster_hosts(); // understand if there exist another way
+    let cluster_hosts = raft_node_mutex.cluster_hosts();
     let request_vote_request = build_request_vote_request(raft_node_mutex);
-    let request_vote_responses = perform_vote_request(cluster_hosts, request_vote_request).await;
+    let request_vote_responses = perform_vote_request(&cluster_hosts, request_vote_request).await;
 
-    // todo: parametrize cluster size
-    info!("Received {} responses out of {} nodes during the election process", request_vote_responses.len(), 2);
+    info!("Received {} responses out of {} nodes during the election process", request_vote_responses.len(), cluster_hosts.len());
 
-    if gained_quorum(3, request_vote_responses) {
+    if gained_quorum(cluster_hosts.len() + 1, request_vote_responses) {
         info!("I'm the leader since I've gained the quorum!");
         raft_node.lock().await.switch_to_leader();
         // todo: initialize nextIndexByHost and matchIndexByHost
@@ -110,11 +108,11 @@ async fn trigger_leader_election(raft_node: Arc<Mutex<RaftNode>>) {
 }
 
 // todo: performing the API calls are identical -> generify the code!
-async fn perform_append_entries_requests(cluster_hosts: Vec<String>, append_entries_request: AppendEntriesRequest) -> Vec<AppendEntriesResponse> {
+async fn perform_append_entries_requests(cluster_hosts: &[String], append_entries_request: AppendEntriesRequest) -> Vec<AppendEntriesResponse> {
     let client = reqwest::Client::new(); // todo: do not create at each iteration
 
     let mut responses: Vec<AppendEntriesResponse> = vec![];
-    for (cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
+    for (_cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
         let endpoint = format!("http://{}/append_entries", cluster_host);
 
         let res = client.post(&endpoint)
@@ -133,11 +131,11 @@ async fn perform_append_entries_requests(cluster_hosts: Vec<String>, append_entr
     responses
 }
 
-async fn perform_vote_request(cluster_hosts: Vec<String>, request_vote_request: RequestVoteRequest) -> Vec<RequestVoteResponse> {
+async fn perform_vote_request(cluster_hosts: &[String], request_vote_request: RequestVoteRequest) -> Vec<RequestVoteResponse> {
     let client = reqwest::Client::new(); // todo: do not create at each iteration
 
     let mut responses: Vec<RequestVoteResponse> = vec![];
-    for (cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
+    for (_cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
         let endpoint = format!("http://{}/request_vote", cluster_host);
 
         let res = client.post(&endpoint)
@@ -157,9 +155,11 @@ async fn perform_vote_request(cluster_hosts: Vec<String>, request_vote_request: 
 }
 
 fn gained_quorum(cluster_size: usize, request_vote_responses: Vec<RequestVoteResponse>) -> bool {
-    request_vote_responses.iter()
+    let number_of_approvals = request_vote_responses.iter()
         .filter(|response| { response.vote_granted })
-        .count() > (cluster_size / 2)
+        .count();
+    info!("Number of approvals: {number_of_approvals}");
+    number_of_approvals > (cluster_size / 2)
 }
 
 

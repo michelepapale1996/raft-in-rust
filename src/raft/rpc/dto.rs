@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-
-use super::log::LogEntry;
+use crate::raft::model::log::LogEntry;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppendEntriesRequest {

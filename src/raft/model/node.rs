@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use super::log::Log;
+use crate::raft::model::log::Log;
 
 #[derive(Debug, Clone)]
 pub struct RaftNodeConfig {
@@ -48,11 +48,11 @@ impl RaftNode {
     }
 
     pub fn cluster_hosts(&self) -> Vec<String> {
-        self.raft_node_config.cluster_hosts.clone() // todo: evaluate how to improve it
+        self.raft_node_config.cluster_hosts.clone()
     }
 
     pub fn node_id(&self) -> u32 {
-        self.raft_node_config.node_id.clone() // todo: evaluate how to improve it
+        self.raft_node_config.node_id
     }
 
     pub fn state(&self) -> NodeState {
@@ -82,7 +82,7 @@ impl RaftNode {
     pub fn trigger_new_election(&mut self) {
         self.state = NodeState::Candidate;
         self.current_term += 1;
-        self.voted_for = None;
+        self.voted_for = Some(self.node_id())
     }
 
     pub fn vote_for(&mut self, candidate_id: u32) {

@@ -1,10 +1,9 @@
 use clap::Parser;
 use log::{info, LevelFilter};
-use raft_in_rust::raft::node::RaftNodeConfig;
-use raft_in_rust::start;
 use chrono::Local;
 use env_logger::Builder;
 use std::io::Write;
+use raft_in_rust::raft::model::node::RaftNodeConfig;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -44,5 +43,5 @@ async fn main() {
 
     info!("Starting server...");
 
-    start(node_config).await;
+    raft_in_rust::start(node_config).await;
 }
