@@ -1,9 +1,5 @@
 use clap::Parser;
-use log::{info, LevelFilter};
-use chrono::Local;
-use env_logger::Builder;
-use std::io::Write;
-use raft_in_rust::raft::model::node::RaftNodeConfig;
+use raft_in_rust::raft::model::state::RaftNodeConfig;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -28,20 +24,6 @@ fn build_raft_node_config(cli_args: CliArgs) -> RaftNodeConfig {
 async fn main() {
     let cli_args = CliArgs::parse();
     let node_config = build_raft_node_config(cli_args);
-
-    Builder::new()
-        .format(|buf, record| {
-            writeln!(buf,
-                     "{} [{}] - {}",
-                     Local::now().format("%Y-%m-%dT%H:%M:%S"),
-                     record.level(),
-                     record.args()
-            )
-        })
-        .filter(None, LevelFilter::Info)
-        .init();
-
-    info!("Starting server...");
 
     raft_in_rust::start(node_config).await;
 }

@@ -1,4 +1,3 @@
-use log::error;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 pub async fn perform_append_entries_requests(cluster_hosts: &[String], append_entries_request: AppendEntriesRequest) -> Vec<AppendEntriesResponse> {
@@ -16,8 +15,8 @@ pub async fn perform_append_entries_requests(cluster_hosts: &[String], append_en
         if res.is_ok() {
             responses.push(res.unwrap().json().await.unwrap())
         } else {
-            error!("Error while calling endpoint {}", endpoint);
-            error!("{:?}", res.err().unwrap())
+            tracing::error!("Error while calling endpoint {}", endpoint);
+            // tracing::error!("{:?}", res.err().unwrap())
         }
     }
 
@@ -39,8 +38,8 @@ pub async fn perform_vote_request(cluster_hosts: &[String], request_vote_request
         if res.is_ok() {
             responses.push(res.unwrap().json().await.unwrap())
         } else {
-            error!("Error while calling endpoint {}", endpoint);
-            error!("{:?}", res.err().unwrap())
+            tracing::error!("Error while calling endpoint {}", endpoint);
+            // tracing::error!("{:?}", res.err().unwrap())
         }
     }
 

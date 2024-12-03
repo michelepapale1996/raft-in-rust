@@ -16,7 +16,7 @@ pub enum NodeState {
 }
 
 #[derive(Debug)]
-pub struct RaftNode {
+pub struct RaftState {
     raft_node_config: RaftNodeConfig,
     current_term: u64,
     voted_for: Option<u32>,
@@ -31,9 +31,9 @@ pub struct RaftNode {
     match_index: HashMap<u64, u64>,
 }
 
-impl RaftNode {
-    pub fn build(raft_node_config: RaftNodeConfig) -> RaftNode {
-        RaftNode {
+impl RaftState {
+    pub fn build(raft_node_config: RaftNodeConfig) -> RaftState {
+        RaftState {
             raft_node_config,
             current_term: 0,
             voted_for: None,
