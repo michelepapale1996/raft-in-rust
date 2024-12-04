@@ -1,6 +1,7 @@
+use tracing::Level;
 use tokio::sync::oneshot;
 use tokio::sync::mpsc::Receiver;
-use crate::NodeMessage;
+use crate::raft::model::inner_messaging::NodeMessage;
 use crate::raft::model::state::{NodeState, RaftState};
 use crate::raft::request_executor;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
@@ -27,7 +28,7 @@ impl RaftBroker {
         }
     }
 
-    // #[tracing::instrument(skip(self), fields(state=?self.raft_state, msg=?msg))]
+    #[tracing::instrument(level = Level::DEBUG, skip(self), fields(state=?self.raft_state, msg=?msg))]
     async fn process_received_message(&mut self, msg: NodeMessage) {
         match msg {
             NodeMessage::ElectionTimeout => self.start_leader_election_process().await,

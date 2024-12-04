@@ -1,5 +1,5 @@
 use tokio::sync::{mpsc, oneshot};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 use crate::raft::broker::RaftBroker;
 use crate::raft::model::state::{RaftState, RaftNodeConfig};
 use crate::raft::request_acceptor::RequestAcceptor;
@@ -34,22 +34,12 @@ pub async fn start(node_config: RaftNodeConfig) {
     request_acceptor.start_accepting_requests(&node_config).await;
 }
 
-// todo: move in a separate file!
-#[derive(Debug)]
-enum NodeMessage {
-    ElectionTimeout,
-    AppendEntriesTimeout,
-    RequestVote {
-        payload: RequestVoteRequest,
-        reply_channel: oneshot::Sender<RequestVoteResponse>
-    },
-    AppendEntries {
-        payload: AppendEntriesRequest,
-        reply_channel: oneshot::Sender<AppendEntriesResponse>
-    }
-}
-
 fn init_tracing() {
-    let subscriber = FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber).expect("error setting global tracing subscriber");
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(env_filter)
+        .init();
 }

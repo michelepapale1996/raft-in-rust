@@ -5,7 +5,7 @@ use axum::routing::post;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tracing::error;
-use crate::NodeMessage;
+use crate::raft::model::inner_messaging::NodeMessage;
 use crate::raft::model::state::{RaftNodeConfig};
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 

@@ -2,7 +2,7 @@ use std::time::Duration;
 use rand::{thread_rng, Rng};
 use tokio::sync::mpsc::Sender;
 use tokio::time;
-use crate::NodeMessage;
+use crate::raft::model::inner_messaging::NodeMessage;
 
 #[derive(Debug)]
 pub struct Scheduler {
