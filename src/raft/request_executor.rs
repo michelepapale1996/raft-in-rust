@@ -16,7 +16,6 @@ pub async fn perform_append_entries_requests(cluster_hosts: &[String], append_en
             responses.push(res.unwrap().json().await.unwrap())
         } else {
             tracing::error!("Error while calling endpoint {}", endpoint);
-            // tracing::error!("{:?}", res.err().unwrap())
         }
     }
 
@@ -39,7 +38,6 @@ pub async fn perform_vote_request(cluster_hosts: &[String], request_vote_request
             responses.push(res.unwrap().json().await.unwrap())
         } else {
             tracing::error!("Error while calling endpoint {}", endpoint);
-            // tracing::error!("{:?}", res.err().unwrap())
         }
     }
 

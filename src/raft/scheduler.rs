@@ -1,5 +1,5 @@
 use std::time::Duration;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use tokio::sync::mpsc::Sender;
 use tokio::time;
 use crate::raft::model::inner_messaging::NodeMessage;
@@ -20,10 +20,10 @@ impl Scheduler {
         let sender = self.bus_tx.clone();
 
         let sleep_time_millis = {
-            let mut rng = thread_rng();
+            let mut rng = rand::rng();
             let lower_bound = election_timeout_seconds.0 * 1000;
             let upper_bound = election_timeout_seconds.1 * 1000;
-            let sleep_time_millis = rng.gen_range(lower_bound..upper_bound);
+            let sleep_time_millis = rng.random_range(lower_bound..upper_bound);
             sleep_time_millis
         };
 

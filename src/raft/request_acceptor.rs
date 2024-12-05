@@ -1,7 +1,11 @@
 use std::net::SocketAddr;
+use std::sync::mpsc::SendError;
 use axum::extract::State;
-use axum::{Json, Router};
+use axum::{Error, Json, Router};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::post;
+use reqwest::Response;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tracing::error;
@@ -38,7 +42,7 @@ impl RequestAcceptor {
 async fn request_vote(
     State(sender): State<Sender<NodeMessage>>,
     Json(payload): Json<RequestVoteRequest>
-) -> Json<RequestVoteResponse> {
+) -> Result<Json<RequestVoteResponse>, StatusCode> {
     let (tx, rx) = oneshot::channel();
 
     let result = sender.send(NodeMessage::RequestVote {
@@ -46,20 +50,20 @@ async fn request_vote(
         reply_channel: tx
     }).await;
 
-    if let Err(x) = result {
-        error!("{:?}", x);
+    if let Err(_) = result {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     match rx.await {
-        Ok(res) => Json(res),
-        Err(_) => panic!("To improve") // todo
+        Ok(response) => Ok(Json(response)),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
 async fn append_entries(
     State(sender): State<Sender<NodeMessage>>,
     Json(payload): Json<AppendEntriesRequest>
-) -> Json<AppendEntriesResponse> {
+) -> Result<Json<AppendEntriesResponse>, StatusCode> {
     let (tx, rx) = oneshot::channel();
 
     let result = sender.send(NodeMessage::AppendEntries {
@@ -67,12 +71,12 @@ async fn append_entries(
         reply_channel: tx
     }).await;
 
-    if let Err(x) = result {
-        error!("{:?}", x);
+    if let Err(_) = result {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     match rx.await {
-        Ok(res) => Json(res),
-        Err(_) => panic!("To improve") // todo
+        Ok(response) => Ok(Json(response)),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
