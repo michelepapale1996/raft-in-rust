@@ -1,9 +1,8 @@
 use clap::Parser;
-use log::{info, LevelFilter};
-use chrono::Local;
-use env_logger::Builder;
-use std::io::Write;
-use raft_in_rust::raft::model::node::RaftNodeConfig;
+use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use raft_in_rust::raft::model::state::RaftNodeConfig;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -29,19 +28,17 @@ async fn main() {
     let cli_args = CliArgs::parse();
     let node_config = build_raft_node_config(cli_args);
 
-    Builder::new()
-        .format(|buf, record| {
-            writeln!(buf,
-                     "{} [{}] - {}",
-                     Local::now().format("%Y-%m-%dT%H:%M:%S"),
-                     record.level(),
-                     record.args()
-            )
-        })
-        .filter(None, LevelFilter::Info)
-        .init();
-
-    info!("Starting server...");
-
+    init_tracing();
     raft_in_rust::start(node_config).await;
+}
+
+
+fn init_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(env_filter)
+        .init();
 }
