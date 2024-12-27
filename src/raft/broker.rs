@@ -70,7 +70,7 @@ impl RaftBroker {
     // #[tracing::instrument(skip(self), fields(id=?self.raft_state))]
     async fn start_append_entries_process(&mut self) {
         if self.raft_state.state() != NodeState::Leader {
-            tracing::info!("I'm not the leader, no need to send append entries");
+            tracing::debug!("I'm not the leader, no need to send append entries");
             return
         }
 

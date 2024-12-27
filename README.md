@@ -22,7 +22,7 @@ RUST_LOG=info cargo run -- --cluster-hosts localhost:9092,localhost:9093 --broke
 ## Endpoints
 
 ## Features
-- [ ] Leader Election
+- [X] Leader Election
 - [ ] Log Replication
 - [ ] Persistence
 - [ ] Membership changes
