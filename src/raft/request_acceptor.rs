@@ -50,7 +50,8 @@ async fn request_vote(
         reply_channel: tx
     }).await;
 
-    if let Err(_) = result {
+    if let Err(error) = result {
+        tracing::error!("request vote send error: {:?}", error);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
@@ -71,7 +72,8 @@ async fn append_entries(
         reply_channel: tx
     }).await;
 
-    if let Err(_) = result {
+    if let Err(error) = result {
+        tracing::error!("request vote send error: {:?}", error);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
