@@ -2,21 +2,30 @@ use tracing::Level;
 use tokio::sync::oneshot;
 use tokio::sync::mpsc::Receiver;
 use crate::raft::model::inner_messaging::NodeMessage;
-use crate::raft::model::state::{NodeState, RaftState};
+use crate::raft::model::state::{NodeState, RaftNodeConfig, RaftState};
 use crate::raft::request_executor;
+use crate::raft::request_executor::RequestExecutor;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 pub struct RaftBroker {
     raft_state: RaftState,
-    bus_rx: Receiver<NodeMessage>
+    bus_rx: Receiver<NodeMessage>,
+    request_executor: RequestExecutor
 }
 
 impl RaftBroker {
-    pub fn new(raft_state: RaftState, bus_rx: Receiver<NodeMessage>) -> RaftBroker {
+    pub fn new(node_config: RaftNodeConfig, bus_rx: Receiver<NodeMessage>) -> RaftBroker {
+        let raft_state = RaftState::build(node_config);
+        let request_executor = RequestExecutor::new();
         Self {
             raft_state,
-            bus_rx
+            bus_rx,
+            request_executor
         }
+    }
+
+    pub(crate) fn start(mut self) {
+        tokio::spawn(async move { self.main_loop().await });
     }
 
     pub async fn main_loop(&mut self) {
@@ -54,7 +63,7 @@ impl RaftBroker {
 
         if !received_heartbeat {
             tracing::info!("I've not received an heartbeat in a timely fashion, I'll trigger a new leader election!");
-            trigger_leader_election(&mut self.raft_state).await
+            self.trigger_leader_election().await
         }
     }
 
@@ -69,7 +78,7 @@ impl RaftBroker {
         let term_of_current_broker = self.raft_state.current_term();
 
         let append_entries_request = build_append_entries_request(&self.raft_state).await;
-        let append_entries_responses = request_executor::perform_append_entries_requests(&cluster_hosts, append_entries_request).await;
+        let append_entries_responses = self.request_executor.perform_append_entries_requests(&cluster_hosts, append_entries_request).await;
 
         let max_term_in_response = append_entries_responses.iter()
             .map(|response| response.term)
@@ -142,31 +151,30 @@ impl RaftBroker {
         self.raft_state.set_received_heartbeat();
         reply_channel.send(AppendEntriesResponse { term: self.raft_state.current_term(), success: true}).unwrap()
     }
-}
 
+    async fn trigger_leader_election(&mut self) {
+        self.raft_state.trigger_new_election();
+        tracing::info!("Starting election for term {}", self.raft_state.current_term());
 
-async fn trigger_leader_election(raft_node: &mut RaftState) {
-    raft_node.trigger_new_election();
-    tracing::info!("Starting election for term {}", raft_node.current_term());
+        let cluster_hosts = self.raft_state.cluster_hosts();
+        let request_vote_request = build_request_vote_request(&self.raft_state);
+        let request_vote_responses = self.request_executor.perform_vote_request(&cluster_hosts, request_vote_request).await;
 
-    let cluster_hosts = raft_node.cluster_hosts();
-    let request_vote_request = build_request_vote_request(&raft_node);
-    let request_vote_responses = request_executor::perform_vote_request(&cluster_hosts, request_vote_request).await;
+        tracing::info!("Received {} responses out of {} nodes during the election process", request_vote_responses.len(), cluster_hosts.len());
 
-    tracing::info!("Received {} responses out of {} nodes during the election process", request_vote_responses.len(), cluster_hosts.len());
-
-    if gained_quorum(cluster_hosts.len() + 1, request_vote_responses) {
-        tracing::info!("I'm the leader since I've gained the quorum!");
-        raft_node.switch_to_leader();
-        // todo: initialize nextIndexByHost and matchIndexByHost
-        /*
-        for (String serverId: clusterState.getOtherClusterNodes()) {
-            nextIndexByHost.put(serverId, log.size());
-            matchIndexByHost.put(serverId, -1);
+        if gained_quorum(cluster_hosts.len() + 1, request_vote_responses) {
+            tracing::info!("I'm the leader since I've gained the quorum!");
+            self.raft_state.switch_to_leader();
+            // todo: initialize nextIndexByHost and matchIndexByHost
+            /*
+            for (String serverId: clusterState.getOtherClusterNodes()) {
+                nextIndexByHost.put(serverId, log.size());
+                matchIndexByHost.put(serverId, -1);
+            }
+             */
+        } else {
+            tracing::info!("I'm not the leader since I've not gained the quorum!");
         }
-         */
-    } else {
-        tracing::info!("I'm not the leader since I've not gained the quorum!");
     }
 }
 

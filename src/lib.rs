@@ -1,45 +1,32 @@
-use tokio::sync::{mpsc, oneshot};
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+use tracing_subscriber::{EnvFilter, fmt};
 use crate::raft::broker::RaftBroker;
+use crate::raft::leader_election_timeout_emitter::LeaderElectionTimeoutEmitter;
 use crate::raft::model::state::{RaftState, RaftNodeConfig};
 use crate::raft::request_acceptor::RequestAcceptor;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
-use crate::raft::scheduler::Scheduler;
+use crate::raft::append_entries_timeout_emitter::AppendEntriesTimeoutEmitter;
 
 pub mod raft;
 
 pub async fn start(node_config: RaftNodeConfig) {
-    init_tracing();
-
     // todo: infinite queue?
-    let (bus_tx, bus_rx) = mpsc::channel(32);
+    let (bus_tx, bus_rx) = tokio::sync::mpsc::channel(32);
 
     tracing::info!("Starting broker...");
-    // bus reader logic
-    let raft_state = RaftState::build(node_config.clone());
-    let mut broker = RaftBroker::new(raft_state, bus_rx);
+    let mut broker = RaftBroker::new(node_config.clone(), bus_rx);
+    broker.start();
 
-    tokio::spawn(async move { broker.main_loop().await });
-
-    tracing::info!("Starting scheduler...");
-    // bus writers logic
-    let scheduler = Scheduler::new(bus_tx.clone());
+    tracing::info!("Starting leader election handler...");
+    let leader_election_timeout_emitter = LeaderElectionTimeoutEmitter::new(bus_tx.clone());
     let election_timeout_seconds = (5, 15);
-    scheduler.schedule_leader_election_process(election_timeout_seconds).await;
-    let heartbeat_timeout_seconds = 1;
-    scheduler.schedule_heartbeats(heartbeat_timeout_seconds).await;
+    leader_election_timeout_emitter.start(election_timeout_seconds).await;
 
-    tracing::info!("Starting accepting requests...");
+    tracing::info!("Starting heartbeat handler...");
+    let append_entries_timeout_emitter = AppendEntriesTimeoutEmitter::new(bus_tx.clone());
+    let heartbeat_timeout_seconds = 1;
+    append_entries_timeout_emitter.start(heartbeat_timeout_seconds).await;
+
+    tracing::info!("Starting request acceptor...");
     let request_acceptor = RequestAcceptor::new(bus_tx.clone());
     request_acceptor.start_accepting_requests(&node_config).await;
-}
-
-fn init_tracing() {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(env_filter)
-        .init();
 }

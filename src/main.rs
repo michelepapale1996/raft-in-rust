@@ -1,4 +1,7 @@
 use clap::Parser;
+use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use raft_in_rust::raft::model::state::RaftNodeConfig;
 
 #[derive(Parser, Debug)]
@@ -25,5 +28,17 @@ async fn main() {
     let cli_args = CliArgs::parse();
     let node_config = build_raft_node_config(cli_args);
 
+    init_tracing();
     raft_in_rust::start(node_config).await;
+}
+
+
+fn init_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(env_filter)
+        .init();
 }
