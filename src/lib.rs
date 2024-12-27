@@ -5,11 +5,11 @@ use crate::raft::model::state::{RaftState, RaftNodeConfig};
 use crate::raft::request_acceptor::RequestAcceptor;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 use crate::raft::append_entries_timeout_emitter::AppendEntriesTimeoutEmitter;
+use crate::raft::model::inner_messaging::NodeMessage;
 
 pub mod raft;
 
 pub async fn start(node_config: RaftNodeConfig) {
-    // todo: infinite queue?
     let (bus_tx, bus_rx) = tokio::sync::mpsc::channel(32);
 
     tracing::info!("Starting broker...");

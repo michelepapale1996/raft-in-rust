@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use reqwest::Response;
+use serde::Serialize;
 use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 pub struct RequestExecutor {
@@ -14,37 +16,34 @@ impl RequestExecutor {
     }
 
     pub async fn perform_append_entries_requests(&self, cluster_hosts: &[String], append_entries_request: AppendEntriesRequest) -> Vec<AppendEntriesResponse> {
-        let mut responses: Vec<AppendEntriesResponse> = vec![];
-        for (_cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
-            let endpoint = format!("http://{}/append_entries", cluster_host);
-
-            let res = self.client.post(&endpoint)
-                .json(&append_entries_request)
-                .send()
-                .await;
-
-            if res.is_ok() {
-                responses.push(res.unwrap().json().await.unwrap())
-            } else {
-                tracing::error!("Error while calling endpoint {}", endpoint);
-            }
-        }
-
-        responses
+        self.perform_requests(cluster_hosts, "append_entries", &append_entries_request).await
     }
 
     pub async fn perform_vote_request(&self, cluster_hosts: &[String], request_vote_request: RequestVoteRequest) -> Vec<RequestVoteResponse> {
-        let mut responses: Vec<RequestVoteResponse> = vec![];
-        for (_cluster_host_index, cluster_host) in cluster_hosts.iter().enumerate() {
-            let endpoint = format!("http://{}/request_vote", cluster_host);
+        self.perform_requests(cluster_hosts, "request_vote", &request_vote_request).await
+    }
+
+    async fn perform_requests<T, U>(&self, cluster_hosts: &[String], endpoint_suffix: &str, request_body: &T) -> Vec<U>
+    where
+        T: serde::Serialize,
+        U: serde::de::DeserializeOwned + std::fmt::Debug
+    {
+        let mut responses: Vec<U> = vec![];
+        for cluster_host in cluster_hosts {
+            let endpoint = format!("http://{}/{}", cluster_host, endpoint_suffix);
 
             let res = self.client.post(&endpoint)
-                .json(&request_vote_request)
+                .json(request_body)
                 .send()
                 .await;
 
-            if res.is_ok() {
-                responses.push(res.unwrap().json().await.unwrap())
+            if let Ok(response) = res {
+                let json = response.json().await;
+                if let Ok(json) = json {
+                    responses.push(json);
+                } else {
+                    tracing::error!("Error while parsing JSON from {:?}", json);
+                }
             } else {
                 tracing::error!("Error while calling endpoint {}", endpoint);
             }
