@@ -1,5 +1,6 @@
 use tokio::sync::oneshot;
-use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+use crate::raft::rpc::application::dto::{EntryResponse, GetEntryRequest, UpsertEntryRequest};
+use crate::raft::rpc::raft::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 #[derive(Debug)]
 pub enum NodeMessage {
@@ -12,5 +13,13 @@ pub enum NodeMessage {
     AppendEntries {
         payload: AppendEntriesRequest,
         reply_channel: oneshot::Sender<AppendEntriesResponse>
+    },
+    GetEntryRequest {
+        payload: GetEntryRequest,
+        reply_channel: oneshot::Sender<EntryResponse>
+    },
+    UpsertEntryRequest {
+        payload: UpsertEntryRequest,
+        reply_channel: oneshot::Sender<EntryResponse>
     }
 }

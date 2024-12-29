@@ -20,7 +20,12 @@ fn build_raft_node_config(cli_args: CliArgs) -> RaftNodeConfig {
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    RaftNodeConfig { node_id: cli_args.broker_port as u32, broker_port: cli_args.broker_port, cluster_hosts }
+    RaftNodeConfig {
+        node_id: cli_args.broker_port as u32,
+        raft_port: cli_args.broker_port,
+        application_port: cli_args.broker_port + 1000, // todo: configure port with cli arguments
+        cluster_hosts
+    }
 }
 
 #[tokio::main]

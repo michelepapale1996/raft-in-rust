@@ -11,14 +11,14 @@ use tokio::sync::oneshot;
 use tracing::error;
 use crate::raft::model::inner_messaging::NodeMessage;
 use crate::raft::model::state::{RaftNodeConfig};
-use crate::raft::rpc::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+use crate::raft::rpc::raft::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
-pub struct RequestAcceptor {
+pub struct RaftRequestAcceptor {
     bus_tx: Sender<NodeMessage>
 }
 
-impl RequestAcceptor {
-    pub fn new(bus_tx: Sender<NodeMessage>) -> RequestAcceptor {
+impl RaftRequestAcceptor {
+    pub fn new(bus_tx: Sender<NodeMessage>) -> RaftRequestAcceptor {
         Self {
             bus_tx
         }
@@ -30,12 +30,15 @@ impl RequestAcceptor {
             .route("/append_entries", post(append_entries))
             .with_state(self.bus_tx.clone());
 
-        let addr = SocketAddr::from(([127, 0, 0, 1], node_config.broker_port));
-        tracing::info!("Raft node with id {} listening on {addr}!", node_config.node_id);
-        axum_server::bind(addr)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        let addr = SocketAddr::from(([127, 0, 0, 1], node_config.raft_port));
+        tracing::info!("Raft node listening on {addr}!");
+
+        tokio::spawn(async move {
+            axum_server::bind(addr)
+                .serve(app.into_make_service())
+                .await
+                .unwrap();
+        });
     }
 }
 
