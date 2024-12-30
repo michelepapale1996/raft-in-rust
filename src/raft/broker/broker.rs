@@ -7,7 +7,6 @@ use tokio::sync::oneshot;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot::Sender;
 use crate::raft::broker::handlers::append_entries::AppendEntriesHandler;
-use crate::raft::broker::handlers::application_request::ApplicationRequestHandler;
 use crate::raft::broker::handlers::leader_election::LeaderElectionHandler;
 use crate::raft::broker::handlers::request_vote::RequestVoteHandler;
 use crate::raft::broker::raft_request_executor::RaftRequestExecutor;
@@ -23,8 +22,7 @@ pub struct RaftBroker {
     state_machine: StateMachine,
     bus_rx: Receiver<NodeMessage>,
     leader_election_handler: LeaderElectionHandler,
-    append_entries_handler: AppendEntriesHandler,
-    application_request_handler: ApplicationRequestHandler
+    append_entries_handler: AppendEntriesHandler
 }
 
 impl RaftBroker {
@@ -35,14 +33,12 @@ impl RaftBroker {
         let leader_election_handler = LeaderElectionHandler::new(request_executor.clone());
         let append_entries_handler = AppendEntriesHandler::new(request_executor.clone());
 
-        let application_request_handler = ApplicationRequestHandler::new();
         Self {
             raft_state,
             state_machine: StateMachine::new(),
             bus_rx,
             leader_election_handler,
-            append_entries_handler,
-            application_request_handler
+            append_entries_handler
         }
     }
 
@@ -73,10 +69,19 @@ impl RaftBroker {
                 RequestVoteHandler::handle_request_vote_request(&mut self.raft_state, payload, reply_channel).await,
 
             // here starts application requests
-            NodeMessage::GetEntryRequest { payload , reply_channel } =>
-                self.application_request_handler.handle_get_request(&mut self.state_machine, payload, reply_channel).await,
-            NodeMessage::UpsertEntryRequest { payload, reply_channel} =>
-                self.application_request_handler.handle_upsert_request(&mut self.raft_state, payload, reply_channel).await,
+            NodeMessage::GetEntryRequest { payload , reply_channel } => {
+                let value = self.state_machine.get(&*payload.key).map(|string| {string.to_owned()});
+                reply_channel.send(EntryResponse { key: payload.key, value }).unwrap();
+            },
+            NodeMessage::UpsertEntryRequest { payload, reply_channel} => {
+                // todo: handle the case where I'm not the leader!
+
+                self.raft_state.log.append(&payload.key, &payload.value, self.raft_state.current_term);
+
+                // todo: await till the entry is not persisted & replicated in the log
+
+                reply_channel.send(EntryResponse { key: payload.key, value: Some(payload.value) } ).unwrap()
+            }
         }
     }
 }

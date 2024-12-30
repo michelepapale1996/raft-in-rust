@@ -7,7 +7,6 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use crate::raft::model::inner_messaging::NodeMessage;
 use crate::raft::model::state::RaftNodeConfig;
-use crate::raft::model::state_machine::StateMachineCommand;
 use crate::raft::rpc::application::dto::{EntryResponse, GetEntryRequest, UpsertEntryRequest};
 use crate::raft::rpc::raft::dto::{RequestVoteRequest, RequestVoteResponse};
 

@@ -17,7 +17,7 @@ impl AppendEntriesHandler {
     }
 
     // #[tracing::instrument(skip(self), fields(id=?self.raft_state))]
-    pub(crate) async fn start_append_entries_process(&self, raft_state: &mut RaftState, state_machine: &mut StateMachine) {
+    pub async fn start_append_entries_process(&self, raft_state: &mut RaftState, state_machine: &mut StateMachine) {
         if raft_state.state != NodeState::Leader {
             tracing::trace!("I'm not the leader, no need to send append entries");
             return
@@ -65,14 +65,14 @@ impl AppendEntriesHandler {
                 }
             }
 
+            let my_last_index = raft_state.log.last_log_entry().map_or(-1, |it| it.index);
 
             let mut values = raft_state.get_match_index_by_host().values().collect::<Vec<_>>();
             values.sort();
+            let n = *values.get(values.len() / 2).unwrap();
 
-            // todo: to review
-            let N = *values.get(values.len() / 2).unwrap();
-            if *N > raft_state.commit_index && *N < raft_state.log.size() as i64 && raft_state.log.entry_at(*N).unwrap().term == raft_state.current_term {
-                raft_state.commit_index = *N
+            if *n > raft_state.commit_index && *n <= my_last_index && raft_state.log.entry_at(*n).unwrap().term == raft_state.current_term {
+                raft_state.commit_index = *n
             }
 
             self.apply_command_to_state_machine(raft_state, state_machine);
@@ -90,12 +90,13 @@ impl AppendEntriesHandler {
                 let next_index_for_host = raft_state.get_next_index_for_host(host);
                 if let Some(next_index_for_host) = next_index_for_host {
                     if last_log_index >= next_index_for_host {
+
                         AppendEntriesRequest {
                             term: raft_state.current_term,
                             leader_id: raft_state.node_id(),
                             prev_log_index: raft_state.log.entry_at(next_index_for_host - 1).map_or(-1, |it| it.index),
                             prev_log_term: raft_state.log.entry_at(next_index_for_host - 1).map_or(0, |it| it.term),
-                            entries: raft_state.log.entries_starting_from_index(next_index_for_host),
+                            entries: raft_state.log.entries_starting_from_index(next_index_for_host).into_iter().cloned().collect::<Vec<_>>(),
                             leader_commit: raft_state.commit_index
                         }
                     } else {
@@ -143,7 +144,7 @@ impl AppendEntriesHandler {
                                                state_machine: &mut StateMachine,
                                                payload: AppendEntriesRequest,
                                                reply_channel: oneshot::Sender<AppendEntriesResponse>) {
-        tracing::info!("Received append entries request {:?}", payload);
+        // tracing::info!("Received append entries request {:?}", payload);
 
         /*
         if raft_node.state() == NodeState::Leader {
@@ -172,15 +173,13 @@ impl AppendEntriesHandler {
                     reply_channel.send(AppendEntriesResponse { term: raft_state.current_term, success: false}).unwrap();
                 } else {
                     for entry in payload.entries.iter() {
-                        tracing::info!("Appending entry {:?}", entry);
+                        tracing::info!("Appending entry {:?} to the log", entry);
                         raft_state.log.append(&*entry.entry.key, &*entry.entry.value, entry.term);
                     }
 
                     if payload.leader_commit > raft_state.commit_index {
-                        // todo: the index should not be related to the size of the log!
-                        let last_new_log_entry_index = (raft_state.log.size() - 1) as i64; // todo: understand how to fix this cast
-                        let last_committed_offset = min(payload.leader_commit, last_new_log_entry_index);
-                        raft_state.commit_index = last_committed_offset
+                        let last_index = raft_state.log.last_log_entry().map_or(0, |it| it.index);
+                        raft_state.commit_index = min(payload.leader_commit, last_index)
                     }
 
                     self.apply_command_to_state_machine(raft_state, state_machine);
@@ -214,7 +213,7 @@ impl AppendEntriesHandler {
 
                 match log_entry {
                     Some(log_entry) => {
-                        tracing::info!("Applying command {:?} on this server...", log_entry);
+                        tracing::info!("Applying {:?} on this server...", log_entry);
                         state_machine.insert(log_entry.entry.key.as_str(), log_entry.entry.value.as_str());
                     },
                     None => {

@@ -19,8 +19,3 @@ impl StateMachine {
         self.state_by_key.get(key).map(String::as_str)
     }
 }
-
-pub struct StateMachineCommand {
-    key: String,
-    value: String
-}

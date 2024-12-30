@@ -82,7 +82,8 @@ impl RaftState {
     pub fn initialize_next_index_by_host(&mut self) {
         self.next_index_by_host = HashMap::new();
         self.cluster_hosts().iter().for_each(|host| {
-            self.next_index_by_host.insert(host.to_owned(), self.log.size() as i64); // todo: how to handle this cast?
+            let last_index = self.log.last_log_entry().map_or(-1, |l| l.index);
+            self.next_index_by_host.insert(host.to_owned(), last_index + 1);
         })
     }
 
