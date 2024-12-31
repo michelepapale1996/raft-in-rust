@@ -1,6 +1,23 @@
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
-use crate::raft::rpc::application::dto::{EntryResponse, GetEntryRequest, UpsertEntryRequest};
 use crate::raft::rpc::raft::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+
+#[derive(Debug)]
+pub struct GetEntryRequest {
+    pub key: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UpsertEntryRequest {
+    pub key: String,
+    pub value: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct EntryResponse {
+    pub key: String,
+    pub value: Option<String>
+}
 
 #[derive(Debug)]
 pub enum NodeMessage {

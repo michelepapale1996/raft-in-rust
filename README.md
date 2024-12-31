@@ -20,13 +20,28 @@ RUST_LOG=info cargo run -- --cluster-hosts localhost:9092,localhost:9093 --broke
 ```
 
 ## Endpoints
+Find the leader and then:
+```shell
+curl --location --request PUT 'localhost:10093/v1/kv/hello' \
+--header 'Content-Type: application/json' \
+--data '{
+    "value": "world"
+}'
+```
+
+To retrieve the value associated to hello key:
+```shell
+curl --location 'localhost:10094/v1/kv/hello'
+```
 
 ## Features
 - [X] Leader Election
-- [ ] Log Replication
+- [X] Log Replication
 - [ ] Persistence
 - [ ] Membership changes
 - [ ] Log Compaction
 
 ## Open points & Improvements
-- [] Favor grpc instead of HTTP API calls
+- [ ] Unit & Functional tests
+- [ ] Favor grpc instead of HTTP API calls
+- [ ] Decouple the Raft library from the application

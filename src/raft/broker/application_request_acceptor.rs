@@ -5,9 +5,9 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
-use crate::raft::model::inner_messaging::NodeMessage;
+use crate::raft::model::inner_messaging::{EntryResponse, GetEntryRequest, NodeMessage, UpsertEntryRequest};
 use crate::raft::model::state::RaftNodeConfig;
-use crate::raft::rpc::application::dto::{EntryResponse, GetEntryRequest, UpsertEntryRequest};
+use crate::raft::rpc::application::dto::{ValueInformation, ValuesInformation};
 use crate::raft::rpc::raft::dto::{RequestVoteRequest, RequestVoteResponse};
 
 pub struct ApplicationRequestAcceptor {
@@ -23,8 +23,8 @@ impl ApplicationRequestAcceptor {
 
     pub async fn start_accepting_requests(&self, node_config: &RaftNodeConfig) {
         let app = Router::new()
-            .route("/:key", get(get_value_by_key))
-            .route("/:key", post(upsert_value_by_key))
+            // .route("/v1/kv", get(get_all_values)) // todo!
+            .route("/v1/kv/:key", get(get_value_by_key).put(upsert_value_by_key))
             .with_state(self.bus_tx.clone());
 
         let addr = SocketAddr::from(([127, 0, 0, 1], node_config.application_port));
@@ -40,7 +40,7 @@ impl ApplicationRequestAcceptor {
 async fn get_value_by_key(
     State(sender): State<Sender<NodeMessage>>,
     Path(key): Path<String>,
-) -> Result<Json<EntryResponse>, StatusCode> {
+) -> Result<Json<ValueInformation>, StatusCode> {
     let (tx, rx) = oneshot::channel();
 
     let result = sender.send(NodeMessage::GetEntryRequest {
@@ -53,23 +53,29 @@ async fn get_value_by_key(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    // todo: in case it does not exist, return proper http status code
     match rx.await {
-        Ok(response) => Ok(Json(response)),
+        Ok(response) => {
+            match response.value {
+                Some(value) => Ok(Json(ValueInformation { value })),
+                None => Err(StatusCode::NOT_FOUND)
+            }
+        },
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
-// todo: here the body should not contain the key - decouple the http layer from the model
 async fn upsert_value_by_key(
     State(sender): State<Sender<NodeMessage>>,
     Path(key): Path<String>,
-    Json(payload): Json<UpsertEntryRequest>
-) -> Result<Json<EntryResponse>, StatusCode> {
+    Json(payload): Json<ValueInformation>
+) -> Result<Json<ValueInformation>, StatusCode> {
     let (tx, rx) = oneshot::channel();
 
     let result = sender.send(NodeMessage::UpsertEntryRequest {
-        payload,
+        payload: UpsertEntryRequest {
+            key,
+            value: payload.value
+        },
         reply_channel: tx
     }).await;
 
@@ -79,7 +85,12 @@ async fn upsert_value_by_key(
     }
 
     match rx.await {
-        Ok(response) => Ok(Json(response)),
+        Ok(response) => {
+            match response.value {
+                Some(value) => Ok(Json(ValueInformation { value })),
+                None => Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        },
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }

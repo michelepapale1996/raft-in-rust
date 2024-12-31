@@ -10,11 +10,10 @@ use crate::raft::broker::handlers::append_entries::AppendEntriesHandler;
 use crate::raft::broker::handlers::leader_election::LeaderElectionHandler;
 use crate::raft::broker::handlers::request_vote::RequestVoteHandler;
 use crate::raft::broker::raft_request_executor::RaftRequestExecutor;
-use crate::raft::model::inner_messaging::NodeMessage;
+use crate::raft::model::inner_messaging::{EntryResponse, NodeMessage};
 use crate::raft::model::log::LogEntry;
 use crate::raft::model::state::{NodeState, RaftNodeConfig, RaftState};
 use crate::raft::model::state_machine::StateMachine;
-use crate::raft::rpc::application::dto::{EntryResponse, GetEntryRequest, UpsertEntryRequest};
 use crate::raft::rpc::raft::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
 
 pub struct RaftBroker {
@@ -53,6 +52,7 @@ impl RaftBroker {
         });
     }
 
+    // todo: this method should be agnostic from the messages
     #[tracing::instrument(level = Level::TRACE, skip(self), fields(state=?self.raft_state, msg=?msg))]
     async fn process_received_message(&mut self, msg: NodeMessage) {
         match msg {
@@ -76,10 +76,11 @@ impl RaftBroker {
             NodeMessage::UpsertEntryRequest { payload, reply_channel} => {
                 // todo: handle the case where I'm not the leader!
 
+
                 self.raft_state.log.append(&payload.key, &payload.value, self.raft_state.current_term);
-
-                // todo: await till the entry is not persisted & replicated in the log
-
+                tracing::info!("Sending append entries to replicate the log...");
+                self.append_entries_handler.start_append_entries_process(&mut self.raft_state, &mut self.state_machine).await;
+                // todo: arrived here, I'm still not sure that my entry has been committed!
                 reply_channel.send(EntryResponse { key: payload.key, value: Some(payload.value) } ).unwrap()
             }
         }
