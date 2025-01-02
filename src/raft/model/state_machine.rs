@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 pub struct StateMachine {
-    state_by_key: HashMap<String, String>
+    state_by_key: HashMap<String, String>,
 }
 
 impl StateMachine {
     pub fn new() -> Self {
         Self {
-            state_by_key: HashMap::new()
+            state_by_key: HashMap::new(),
         }
     }
 

@@ -1,12 +1,12 @@
-use std::time::Duration;
+use crate::raft::model::inner_messaging::NodeMessage;
 use rand::Rng;
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time;
-use crate::raft::model::inner_messaging::NodeMessage;
 
 #[derive(Debug)]
 pub struct LeaderElectionTimeoutEmitter {
-    bus_tx: Sender<NodeMessage>
+    bus_tx: Sender<NodeMessage>,
 }
 
 impl LeaderElectionTimeoutEmitter {

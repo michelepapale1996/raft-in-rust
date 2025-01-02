@@ -4,18 +4,18 @@ use serde::{Deserialize, Serialize};
 pub struct LogEntry {
     pub term: u64,
     pub index: i64,
-    pub entry: Entry
+    pub entry: Entry,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entry {
     pub key: String,
-    pub value: String
+    pub value: String,
 }
 
 #[derive(Debug)]
 pub struct Log {
-    entries: Vec<LogEntry>
+    entries: Vec<LogEntry>,
 }
 
 impl Log {
@@ -46,11 +46,16 @@ impl Log {
         entries
     }
 
-    pub fn append(&mut self, key: &str, value: &str, term: u64) {
+    pub fn append(&mut self, key: &str, value: &str, term: u64) -> i64 {
         let index = self.last_log_entry().map_or(0, |entry| entry.index + 1);
 
-        let entry = Entry { key: key.to_owned(), value: value.to_owned() };
-        let entry = LogEntry { term, index, entry};
+        let entry = Entry {
+            key: key.to_owned(),
+            value: value.to_owned(),
+        };
+        let entry = LogEntry { term, index, entry };
         self.entries.push(entry);
+
+        index
     }
 }

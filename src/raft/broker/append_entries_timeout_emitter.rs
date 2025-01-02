@@ -1,19 +1,17 @@
-use std::time::Duration;
+use crate::raft::model::inner_messaging::NodeMessage;
 use rand::{rng, Rng};
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 use tokio::time;
-use crate::raft::model::inner_messaging::NodeMessage;
 
 #[derive(Debug)]
 pub struct AppendEntriesTimeoutEmitter {
-    bus_tx: Sender<NodeMessage>
+    bus_tx: Sender<NodeMessage>,
 }
 
 impl AppendEntriesTimeoutEmitter {
     pub fn new(bus_tx: Sender<NodeMessage>) -> AppendEntriesTimeoutEmitter {
-        AppendEntriesTimeoutEmitter {
-            bus_tx
-        }
+        AppendEntriesTimeoutEmitter { bus_tx }
     }
 
     // #[tracing::instrument(skip(self))]

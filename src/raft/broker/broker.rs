@@ -1,11 +1,3 @@
-use std::cmp::min;
-use std::collections::HashMap;
-use std::iter::Map;
-use std::sync::Arc;
-use tracing::Level;
-use tokio::sync::oneshot;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::oneshot::Sender;
 use crate::raft::broker::handlers::append_entries::AppendEntriesHandler;
 use crate::raft::broker::handlers::leader_election::LeaderElectionHandler;
 use crate::raft::broker::handlers::request_vote::RequestVoteHandler;
@@ -14,14 +6,24 @@ use crate::raft::model::inner_messaging::{EntryResponse, NodeMessage};
 use crate::raft::model::log::LogEntry;
 use crate::raft::model::state::{NodeState, RaftNodeConfig, RaftState};
 use crate::raft::model::state_machine::StateMachine;
-use crate::raft::rpc::raft::dto::{AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse};
+use crate::raft::rpc::raft::dto::{
+    AppendEntriesRequest, AppendEntriesResponse, RequestVoteRequest, RequestVoteResponse,
+};
+use std::cmp::min;
+use std::collections::HashMap;
+use std::iter::Map;
+use std::sync::Arc;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
+use tracing::Level;
 
 pub struct RaftBroker {
     raft_state: RaftState,
     state_machine: StateMachine,
     bus_rx: Receiver<NodeMessage>,
     leader_election_handler: LeaderElectionHandler,
-    append_entries_handler: AppendEntriesHandler
+    append_entries_handler: AppendEntriesHandler,
 }
 
 impl RaftBroker {
@@ -37,7 +39,7 @@ impl RaftBroker {
             state_machine: StateMachine::new(),
             bus_rx,
             leader_election_handler,
-            append_entries_handler
+            append_entries_handler,
         }
     }
 
@@ -46,7 +48,7 @@ impl RaftBroker {
             loop {
                 match self.bus_rx.recv().await {
                     Some(msg) => self.process_received_message(msg).await,
-                    None => tracing::error!("Received nothing")
+                    None => tracing::error!("Received nothing"),
                 }
             }
         });
@@ -57,31 +59,75 @@ impl RaftBroker {
     async fn process_received_message(&mut self, msg: NodeMessage) {
         match msg {
             // local broker timeouts
-            NodeMessage::ElectionTimeout =>
-                self.leader_election_handler.start_leader_election_process(&mut self.raft_state).await,
-            NodeMessage::AppendEntriesTimeout =>
-                self.append_entries_handler.start_append_entries_process(&mut self.raft_state, &mut self.state_machine).await,
+            NodeMessage::ElectionTimeout => {
+                self.leader_election_handler
+                    .start_leader_election_process(&mut self.raft_state)
+                    .await
+            }
+            NodeMessage::AppendEntriesTimeout => {
+                self.append_entries_handler
+                    .start_append_entries_process(&mut self.raft_state, &mut self.state_machine)
+                    .await
+            }
 
             // here starts intra-cluster communication requests
-            NodeMessage::AppendEntries { payload, reply_channel } =>
-                self.append_entries_handler.consume_append_entries(&mut self.raft_state, &mut self.state_machine, payload, reply_channel).await,
-            NodeMessage::RequestVote { payload, reply_channel } =>
-                RequestVoteHandler::handle_request_vote_request(&mut self.raft_state, payload, reply_channel).await,
+            NodeMessage::AppendEntries {
+                payload,
+                reply_channel,
+            } => {
+                self.append_entries_handler
+                    .consume_append_entries(
+                        &mut self.raft_state,
+                        &mut self.state_machine,
+                        payload,
+                        reply_channel,
+                    )
+                    .await
+            }
+            NodeMessage::RequestVote {
+                payload,
+                reply_channel,
+            } => {
+                RequestVoteHandler::handle_request_vote_request(
+                    &mut self.raft_state,
+                    payload,
+                    reply_channel,
+                )
+                .await
+            }
 
             // here starts application requests
-            NodeMessage::GetEntryRequest { payload , reply_channel } => {
-                let value = self.state_machine.get(&*payload.key).map(|string| {string.to_owned()});
-                reply_channel.send(EntryResponse { key: payload.key, value }).unwrap();
-            },
-            NodeMessage::UpsertEntryRequest { payload, reply_channel} => {
+            NodeMessage::GetEntryRequest {
+                payload,
+                reply_channel,
+            } => {
                 // todo: handle the case where I'm not the leader!
+                let value = self
+                    .state_machine
+                    .get(&*payload.key)
+                    .map(|string| string.to_owned());
+                reply_channel
+                    .send(EntryResponse {
+                        key: payload.key,
+                        value,
+                    })
+                    .unwrap();
+            }
+            NodeMessage::UpsertEntryRequest {
+                payload,
+                reply_channel,
+            } => {
+                // todo: handle the case where I'm not the leader!
+                self.append_entries_handler
+                    .append_new_entry(&mut self.raft_state, &mut self.state_machine, &payload)
+                    .await;
 
-
-                self.raft_state.log.append(&payload.key, &payload.value, self.raft_state.current_term);
-                tracing::info!("Sending append entries to replicate the log...");
-                self.append_entries_handler.start_append_entries_process(&mut self.raft_state, &mut self.state_machine).await;
-                // todo: arrived here, I'm still not sure that my entry has been committed!
-                reply_channel.send(EntryResponse { key: payload.key, value: Some(payload.value) } ).unwrap()
+                reply_channel
+                    .send(EntryResponse {
+                        key: payload.key,
+                        value: Some(payload.value),
+                    })
+                    .unwrap()
             }
         }
     }

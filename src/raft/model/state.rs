@@ -1,19 +1,19 @@
-use std::collections::HashMap;
 use crate::raft::model::log::Log;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct RaftNodeConfig {
     pub node_id: u32,
     pub raft_port: u16,
     pub cluster_hosts: Vec<String>,
-    pub application_port: u16
+    pub application_port: u16,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum NodeState {
     Follower,
     Candidate,
-    Leader
+    Leader,
 }
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl RaftState {
             commit_index: -1,
             last_applied: -1,
             next_index_by_host: HashMap::new(),
-            match_index_by_host: HashMap::new()
+            match_index_by_host: HashMap::new(),
         }
     }
 
@@ -83,7 +83,8 @@ impl RaftState {
         self.next_index_by_host = HashMap::new();
         self.cluster_hosts().iter().for_each(|host| {
             let last_index = self.log.last_log_entry().map_or(-1, |l| l.index);
-            self.next_index_by_host.insert(host.to_owned(), last_index + 1);
+            self.next_index_by_host
+                .insert(host.to_owned(), last_index + 1);
         })
     }
 
@@ -107,6 +108,7 @@ impl RaftState {
     }
 
     pub fn set_match_index_for_host(&mut self, host: &str, match_index: i64) {
-        self.match_index_by_host.insert(host.to_owned(), match_index);
+        self.match_index_by_host
+            .insert(host.to_owned(), match_index);
     }
 }

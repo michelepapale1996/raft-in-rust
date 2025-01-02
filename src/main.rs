@@ -1,8 +1,8 @@
 use clap::Parser;
-use tracing_subscriber::{fmt, EnvFilter};
+use raft_in_rust::raft::model::state::RaftNodeConfig;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use raft_in_rust::raft::model::state::RaftNodeConfig;
+use tracing_subscriber::{fmt, EnvFilter};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -15,7 +15,8 @@ struct CliArgs {
 }
 
 fn build_raft_node_config(cli_args: CliArgs) -> RaftNodeConfig {
-    let cluster_hosts = cli_args.cluster_hosts
+    let cluster_hosts = cli_args
+        .cluster_hosts
         .split(",")
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
@@ -24,7 +25,7 @@ fn build_raft_node_config(cli_args: CliArgs) -> RaftNodeConfig {
         node_id: cli_args.broker_port as u32,
         raft_port: cli_args.broker_port,
         application_port: cli_args.broker_port + 1000, // todo: configure port with cli arguments
-        cluster_hosts
+        cluster_hosts,
     }
 }
 
@@ -37,10 +38,8 @@ async fn main() {
     raft_in_rust::start(node_config).await;
 }
 
-
 fn init_tracing() {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(fmt::layer())

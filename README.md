@@ -45,3 +45,4 @@ curl --location 'localhost:10094/v1/kv/hello'
 - [ ] Unit & Functional tests
 - [ ] Favor grpc instead of HTTP API calls
 - [ ] Decouple the Raft library from the application
+- [ ] Remove unwraps and functions that maybe panic
